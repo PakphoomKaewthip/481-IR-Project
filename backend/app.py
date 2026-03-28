@@ -4,20 +4,32 @@ import hashlib
 import hmac
 import json
 import os
+import pickle
 import random
 import secrets
+import sys
 import time
+import warnings
+from functools import lru_cache
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import numpy as np
 from flask import Flask, request, jsonify, Response, g
 import traceback
+from sklearn.metrics.pairwise import cosine_similarity
 from elastic_search import search as elastic_search
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from db import get_connection
 
 app = Flask(__name__)
-recipes_csv_path = Path(__file__).resolve().parent.parent / "resources" / "recipes_final_for_search.csv"
+recipes_csv_path = PROJECT_ROOT / "resources" / "recipes_final_for_search.csv"
+model_artifacts_path = Path(__file__).resolve().parent / "model_artifacts"
 JWT_SECRET = os.environ.get("JWT_SECRET", "ir-project-dev-secret")
 JWT_EXP_SECONDS = 60 * 60 * 24
 
@@ -62,6 +74,100 @@ def load_recipe_lookup():
 
 
 RECIPE_LOOKUP = load_recipe_lookup()
+
+
+@lru_cache(maxsize=1)
+def load_recommendation_resources():
+    recipe_text_lookup = {}
+
+    with recipes_csv_path.open(newline="", encoding="utf-8") as csv_file:
+        reader = csv.DictReader(csv_file)
+        for row in reader:
+            recipe_id = (row.get("recipe_id") or "").strip()
+            if not recipe_id:
+                continue
+            recipe_text_lookup[int(recipe_id)] = (
+                row.get("search_text")
+                or row.get("processed_text")
+                or row.get("description")
+                or ""
+            )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with (model_artifacts_path / "tfidf.pkl").open("rb") as artifact_file:
+            tfidf = pickle.load(artifact_file)
+        with (model_artifacts_path / "svd.pkl").open("rb") as artifact_file:
+            svd = pickle.load(artifact_file)
+
+    return {
+        "recipe_text_lookup": recipe_text_lookup,
+        "tfidf": tfidf,
+        "svd": svd,
+    }
+
+
+def build_bookmark_suggestions(bookmarks, top_k=5):
+    if not bookmarks:
+        return []
+
+    resources = load_recommendation_resources()
+    recipe_text_lookup = resources["recipe_text_lookup"]
+    tfidf = resources["tfidf"]
+    svd = resources["svd"]
+
+    vectorizable_bookmarks = []
+    for bookmark in bookmarks:
+        recipe_id = int(bookmark["recipe_id"])
+        recipe_text = recipe_text_lookup.get(recipe_id, "").strip()
+        if not recipe_text:
+            continue
+
+        vectorizable_bookmarks.append(
+            {
+                **bookmark,
+                "recipe_id": recipe_id,
+                "vector_text": recipe_text,
+            }
+        )
+
+    if not vectorizable_bookmarks:
+        return []
+
+    texts = [bookmark["vector_text"] for bookmark in vectorizable_bookmarks]
+    vectors = svd.transform(tfidf.transform(texts)).astype(np.float32)
+    vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+
+    weights = np.asarray(
+        [max(float(bookmark.get("rating") or 0), 1.0) for bookmark in vectorizable_bookmarks],
+        dtype=np.float32,
+    )
+    profile_vector = np.average(vectors, axis=0, weights=weights).astype(np.float32).reshape(1, -1)
+    profile_vector /= np.maximum(np.linalg.norm(profile_vector, axis=1, keepdims=True), 1e-12)
+
+    similarity_scores = cosine_similarity(profile_vector, vectors).ravel()
+    ranked_indices = np.argsort(similarity_scores)[::-1][:top_k]
+
+    suggestions = []
+    for index in ranked_indices:
+        bookmark = vectorizable_bookmarks[int(index)]
+        score = float(similarity_scores[int(index)])
+        recipe = RECIPE_LOOKUP.get(bookmark["recipe_id"], {})
+
+        suggestions.append(
+            {
+                "bookmark_id": bookmark["bookmark_id"],
+                "recipe_id": bookmark["recipe_id"],
+                "rating": bookmark["rating"],
+                "folder_id": str(bookmark["folder_id"]) if bookmark["folder_id"] is not None else "",
+                "folder": bookmark["folder"],
+                "created_at": bookmark["created_at"].isoformat() if bookmark["created_at"] else None,
+                "score": round(score, 4),
+                "recipe": serialize_recipe(recipe),
+            }
+        )
+
+    return suggestions
 
 
 def serialize_recipe(recipe):
@@ -510,6 +616,49 @@ def get_bookmarks():
     conn.close()
 
     return jsonify(results)
+
+
+@app.route("/bookmarks/suggestions")
+def get_bookmark_suggestions():
+    auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    user_id = g.current_user["user_id"]
+    limit = max(1, min(int(request.args.get("limit", 5)), 5))
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT b.bookmark_id, b.recipe_id, b.rating, b.folder_id, f.folder_name, b.created_at
+        FROM bookmarks b
+        LEFT JOIN folders f ON b.folder_id = f.folder_id
+        WHERE b.user_id = %s
+        ORDER BY b.rating DESC, b.created_at DESC
+    """, (user_id,))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    bookmarks = [
+        {
+            "bookmark_id": row[0],
+            "recipe_id": row[1],
+            "rating": row[2],
+            "folder_id": row[3],
+            "folder": row[4],
+            "created_at": row[5],
+        }
+        for row in rows
+    ]
+
+    try:
+        return jsonify(build_bookmark_suggestions(bookmarks, top_k=limit))
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to load bookmark suggestions: {exc}"}), 500
 
 if __name__ == "__main__":
     print("starting flask")

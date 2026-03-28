@@ -136,6 +136,31 @@ export async function fetchBookmarks(token) {
   }));
 }
 
+export async function fetchBookmarkSuggestions(token, limit = 5) {
+  const url = new URL("http://127.0.0.1:5000/bookmarks/suggestions");
+  url.searchParams.set("limit", String(limit));
+
+  const response = await fetch(url.toString(), {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await parseJsonResponse(response, "Failed to load bookmark suggestions");
+
+  return (Array.isArray(data) ? data : []).map((item) => ({
+    id: String(item.bookmark_id),
+    folderId: item.folder_id || "",
+    rating: Number(item.rating || 0),
+    recipeId: String(item.recipe_id),
+    recipe: normalizeRecipe({
+      ...(item.recipe || {}),
+      score: item.score ?? 0,
+      ml_score: item.score ?? 0,
+    }),
+    savedAt: item.created_at ? Date.parse(item.created_at) : Date.now(),
+    folder: item.folder || "",
+    suggestionScore: Number(item.score || 0),
+  }));
+}
+
 export async function saveBookmark(token, payload) {
   const response = await fetch("http://127.0.0.1:5000/bookmark", {
     method: "POST",

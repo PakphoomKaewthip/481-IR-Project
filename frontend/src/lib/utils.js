@@ -50,6 +50,7 @@ export function normalizeRecipe(raw) {
   const category = raw.category || raw.RecipeCategory || "General";
   const recipeId = String(raw.recipe_id || raw.RecipeId || uid());
   const imageValue = parseImage(raw.Images || raw.images);
+  const mlScore = Number(raw.ml_score ?? raw.score ?? 0);
 
   return {
     recipeId,
@@ -60,6 +61,7 @@ export function normalizeRecipe(raw) {
     instructions: splitInstructions(raw.instructions || raw.RecipeInstructions),
     tags: splitList(raw.keywords || raw.Keywords).slice(0, 6),
     score: Number(raw.score || 0),
+    mlScore,
     image: imageValue ? `http://127.0.0.1:5000/recipe-image/${recipeId}` : "",
   };
 }
