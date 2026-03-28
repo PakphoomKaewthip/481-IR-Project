@@ -7,6 +7,7 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import {
   createFolder,
   fetchBookmarks,
+  fetchBookmarkSuggestions,
   fetchCurrentUser,
   fetchFolders,
   fetchRandomRecipes,
@@ -27,6 +28,7 @@ export default function App() {
   const [token, setToken] = usePersistentState(STORAGE_KEYS.authToken, "");
   const [folders, setFolders] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
+  const [bookmarkSuggestions, setBookmarkSuggestions] = useState([]);
   const [activeFolderId, setActiveFolderId] = useState("");
   const [currentView, setCurrentView] = useState("discover");
   const [currentSection, setCurrentSection] = useState("discover");
@@ -64,6 +66,7 @@ export default function App() {
         if (!cancelled) {
           setFolders([]);
           setBookmarks([]);
+          setBookmarkSuggestions([]);
           setActiveFolderId("");
         }
         return;
@@ -75,13 +78,22 @@ export default function App() {
           fetchBookmarks(token),
         ]);
 
+        let nextBookmarkSuggestions = [];
+        try {
+          nextBookmarkSuggestions = await fetchBookmarkSuggestions(token);
+        } catch {
+          nextBookmarkSuggestions = [];
+        }
+
         if (!cancelled) {
           setFolders(nextFolders);
           setBookmarks(nextBookmarks);
+          setBookmarkSuggestions(nextBookmarkSuggestions);
           setActiveFolderId((current) => current || nextFolders[0]?.id || "");
         }
       } catch (error) {
         if (!cancelled) {
+          setBookmarkSuggestions([]);
           setFeedback(`Failed to load saved data: ${error.message}`);
         }
       }
@@ -207,6 +219,7 @@ export default function App() {
     setResults([]);
     setFolders([]);
     setBookmarks([]);
+    setBookmarkSuggestions([]);
     setActiveFolderId("");
     setCurrentView("discover");
     setCurrentSection("discover");
@@ -327,7 +340,14 @@ export default function App() {
       });
 
       const refreshedBookmarks = await fetchBookmarks(token);
+      let refreshedBookmarkSuggestions = [];
+      try {
+        refreshedBookmarkSuggestions = await fetchBookmarkSuggestions(token);
+      } catch {
+        refreshedBookmarkSuggestions = [];
+      }
       setBookmarks(refreshedBookmarks);
+      setBookmarkSuggestions(refreshedBookmarkSuggestions);
       setSelectedRecipe(null);
       setCurrentSection("bookmarks");
       setFeedback(`Bookmarked "${selectedRecipe.name}" with ${rating} stars.`);
@@ -380,6 +400,7 @@ export default function App() {
           results={results}
           randomRecipes={randomRecipes}
           bookmarks={bookmarks}
+          bookmarkSuggestions={bookmarkSuggestions}
           onOpenRecipe={handleOpenRecipe}
         />
       )}
