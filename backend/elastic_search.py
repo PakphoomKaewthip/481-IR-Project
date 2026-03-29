@@ -101,6 +101,93 @@ def tfidf_search_scores(query):
     return score_map
 
 
+def suggest_query(query, top_k=5):
+    """
+    ใช้ ES fuzzy multi_match เพื่อหาคำที่ใกล้เคียง
+    แล้ว extract tokens จาก name/category ที่ match
+    คืน list ของ suggested terms เรียงตาม score
+    """
+    if not query or not query.strip():
+        return []
+
+    tokens = query.strip().lower().split()
+    suggestions = []
+
+    for token in tokens:
+        # ถ้าคำสั้นเกิน 2 ตัวอักษร ข้ามไป
+        if len(token) < 3:
+            continue
+
+        body = {
+            "query": {
+                "multi_match": {
+                    "query": token,
+                    "fields": ["name^2", "category"],
+                    "fuzziness": "AUTO",
+                    "prefix_length": 1,
+                }
+            },
+            "_source": ["name", "category"],
+            "size": top_k * 2,
+        }
+
+        try:
+            res = es.search(index=INDEX_NAME, body=body)
+            hits = res["hits"]["hits"]
+        except Exception:
+            continue
+
+        seen = set()
+        for hit in hits:
+            src = hit["_source"]
+            # แตก words จาก name และ category
+            for field_value in [src.get("name", ""), src.get("category", "")]:
+                for word in field_value.lower().split():
+                    if word in seen or len(word) < 3:
+                        continue
+                    # เช็คว่า word นี้ใกล้เคียงกับ token ไหม (ไม่ตรงกัน 100%)
+                    if word != token and _is_similar(token, word):
+                        seen.add(word)
+                        suggestions.append({"original": token, "suggestion": word})
+                        if len(suggestions) >= top_k:
+                            break
+                if len(suggestions) >= top_k:
+                    break
+            if len(suggestions) >= top_k:
+                break
+
+    return suggestions
+
+
+def _is_similar(a, b):
+    """
+    เช็คว่า 2 คำใกล้เคียงกันไหม โดยใช้ Levenshtein distance
+    threshold: ถ้าระยะห่างน้อยกว่าหรือเท่ากับ 2 ถือว่าใกล้เคียง
+    """
+    if abs(len(a) - len(b)) > 3:
+        return False
+    return _levenshtein(a, b) <= 2
+
+
+def _levenshtein(s1, s2):
+    """คำนวณ Levenshtein distance ระหว่าง 2 strings"""
+    m, n = len(s1), len(s2)
+    dp = list(range(n + 1))
+
+    for i in range(1, m + 1):
+        prev = dp[0]
+        dp[0] = i
+        for j in range(1, n + 1):
+            temp = dp[j]
+            if s1[i - 1] == s2[j - 1]:
+                dp[j] = prev
+            else:
+                dp[j] = 1 + min(prev, dp[j], dp[j - 1])
+            prev = temp
+
+    return dp[n]
+
+
 # HYBRID SEARCH
 def search(query, top_k=5, candidate_k=100, alpha=0.5):
     """
@@ -148,6 +235,7 @@ def search(query, top_k=5, candidate_k=100, alpha=0.5):
     temp_results.sort(key=lambda x: x["score"], reverse=True)
 
     return temp_results[:top_k]
+
 
 #TEST
 if __name__ == "__main__":

@@ -19,8 +19,7 @@ import numpy as np
 from flask import Flask, request, jsonify, Response, g
 import traceback
 from sklearn.metrics.pairwise import cosine_similarity
-from elastic_search import search as elastic_search
-
+from elastic_search import search as elastic_search, suggest_query
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -613,6 +612,25 @@ def get_bookmarks():
     conn.close()
 
     return jsonify(results)
+
+
+@app.route("/search/suggest")
+def search_suggest():
+    auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    q = request.args.get("q", "").strip()
+
+    if not q or len(q) < 2:
+        return jsonify([])
+
+    try:
+        suggestions = suggest_query(q, top_k=5)
+        return jsonify(suggestions)
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify([])
 
 
 @app.route("/bookmarks/suggestions")

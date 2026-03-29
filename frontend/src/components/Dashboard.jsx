@@ -115,6 +115,8 @@ export default function Dashboard({
   onClearSearch,
   suggestion,
   onAcceptSuggestion,
+  spellSuggestions = [],
+  onAcceptSpellSuggestion,
   results,
   randomRecipes,
   bookmarks,
@@ -209,6 +211,31 @@ export default function Dashboard({
                       Search
                     </button>
                   </div>
+
+                  {/* Real-time spell suggestions */}
+                  {spellSuggestions.length > 0 && (
+                    <div className="spell-suggestions">
+                      <span className="spell-suggestions-label">Did you mean:</span>
+                      {spellSuggestions.map((item, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          className="spell-suggestion-pill"
+                          onClick={() => onAcceptSpellSuggestion(
+                            query.text.replace(
+                              new RegExp(`\\b${item.original}\\b`, "gi"),
+                              item.suggestion
+                            )
+                          )}
+                        >
+                          {query.text.replace(
+                            new RegExp(`\\b${item.original}\\b`, "gi"),
+                            item.suggestion
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="hero-search-meta">
                     <span className="pill">{results.length} results</span>
                     <button onClick={onClearSearch} type="button" className="ghost-btn">
