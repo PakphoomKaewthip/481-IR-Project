@@ -6,7 +6,8 @@
 ._*
 
 # Custom folder icons
-Icon
+Icon
+
 
 # Volume root files
 .DocumentRevisions-V100
@@ -17,5 +18,13 @@ Icon
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 resources
-.idea
-backend
+/.idea/.gitignore
+/.idea/481-IR-Project.iml
+/backend/model_artifacts/lgbm_model.txt
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/backend/model_artifacts/recipe_id_to_idx.pkl
+/backend/model_artifacts/svd.pkl
+/backend/model_artifacts/tfidf.pkl
+/.idea/vcs.xml
