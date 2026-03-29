@@ -278,7 +278,7 @@ def require_auth():
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST,DELETE, OPTIONS"
     return response
 
 @app.route("/")
@@ -573,6 +573,39 @@ def folders_api():
             for row in rows
         ]
     )
+
+@app.route("/folders/<int:folder_id>", methods=["DELETE"])
+def delete_folder(folder_id):
+    auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    user_id = g.current_user["user_id"]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # ลบ bookmarks ใน folder นี้ก่อน (กัน foreign key error)
+        cur.execute("""
+            DELETE FROM bookmarks
+            WHERE user_id = %s AND folder_id = %s
+        """, (user_id, folder_id))
+
+        # ลบ folder
+        cur.execute("""
+            DELETE FROM folders
+            WHERE folder_id = %s AND user_id = %s
+        """, (folder_id, user_id))
+
+        conn.commit()
+        return jsonify({"status": "deleted"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/bookmarks")
 def get_bookmarks():
