@@ -1,25 +1,19 @@
 import csv
-import base64
-import hashlib
-import hmac
-import json
-import os
 import pickle
 import random
-import secrets
 import sys
-import time
 import warnings
 from functools import lru_cache
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 import numpy as np
-from flask import Flask, request, jsonify, Response, g
+from flask import Flask, request, g
 import traceback
 from sklearn.metrics.pairwise import cosine_similarity
-from elastic_search import search as elastic_search, suggest_query
+from backend.search.elastic_search import search as elastic_search, suggest_query
+from backend.auth.jwt_handler import create_token, decode_token
+from backend.auth.password import hash_password, verify_password
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -29,9 +23,6 @@ from db import get_connection
 app = Flask(__name__)
 recipes_csv_path = PROJECT_ROOT / "resources" / "recipes_final_for_search.csv"
 model_artifacts_path = Path(__file__).resolve().parent / "model_artifacts"
-JWT_SECRET = os.environ.get("JWT_SECRET", "ir-project-dev-secret")
-JWT_EXP_SECONDS = 60 * 60 * 24
-
 
 def load_recipe_image_map():
     image_map = {}
@@ -47,7 +38,6 @@ def load_recipe_image_map():
     return image_map
 
 RECIPE_IMAGE_MAP = load_recipe_image_map()
-
 
 def load_recipe_lookup():
     recipe_lookup = {}
@@ -68,12 +58,9 @@ def load_recipe_lookup():
                 "instructions": row.get("instructions", ""),
                 "keywords": row.get("keywords", ""),
             }
-
     return recipe_lookup
 
-
 RECIPE_LOOKUP = load_recipe_lookup()
-
 
 @lru_cache(maxsize=1)
 def load_recommendation_resources():
@@ -104,7 +91,6 @@ def load_recommendation_resources():
         "tfidf": tfidf,
         "svd": svd,
     }
-
 
 def build_bookmark_suggestions(bookmarks, top_k=5):
     if not bookmarks:
@@ -165,9 +151,7 @@ def build_bookmark_suggestions(bookmarks, top_k=5):
                 "recipe": serialize_recipe(recipe),
             }
         )
-
     return suggestions
-
 
 def serialize_recipe(recipe):
     return {
@@ -181,79 +165,11 @@ def serialize_recipe(recipe):
         "keywords": recipe.get("keywords", ""),
     }
 
-
-def _b64url_encode(data):
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _b64url_decode(data):
-    padding = "=" * (-len(data) % 4)
-    return base64.urlsafe_b64decode(data + padding)
-
-
-def hash_password(password, salt=None):
-    salt = salt or secrets.token_hex(16)
-    derived = hashlib.scrypt(
-        password.encode("utf-8"),
-        salt=salt.encode("utf-8"),
-        n=2**14,
-        r=8,
-        p=1,
-    )
-    return f"{salt}${derived.hex()}"
-
-
-def verify_password(password, password_hash):
-    try:
-        salt, expected = password_hash.split("$", 1)
-    except ValueError:
-        return False
-
-    candidate = hash_password(password, salt)
-    return hmac.compare_digest(candidate, password_hash)
-
-
-def create_token(payload):
-    header = {"alg": "HS256", "typ": "JWT"}
-    body = {
-        **payload,
-        "exp": int(time.time()) + JWT_EXP_SECONDS,
-    }
-
-    header_segment = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
-    payload_segment = _b64url_encode(json.dumps(body, separators=(",", ":")).encode("utf-8"))
-    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
-    signature = hmac.new(JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
-
-    return f"{header_segment}.{payload_segment}.{_b64url_encode(signature)}"
-
-
-def decode_token(token):
-    try:
-        header_segment, payload_segment, signature_segment = token.split(".")
-    except ValueError as exc:
-        raise ValueError("Invalid token format") from exc
-
-    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
-    expected_signature = hmac.new(JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
-    actual_signature = _b64url_decode(signature_segment)
-
-    if not hmac.compare_digest(actual_signature, expected_signature):
-        raise ValueError("Invalid token signature")
-
-    payload = json.loads(_b64url_decode(payload_segment))
-    if int(payload.get("exp", 0)) < int(time.time()):
-        raise ValueError("Token expired")
-
-    return payload
-
-
 def get_bearer_token():
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None
     return auth_header.split(" ", 1)[1].strip()
-
 
 def require_auth():
     token = get_bearer_token()
@@ -278,13 +194,12 @@ def require_auth():
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST,DELETE, OPTIONS"
     return response
 
 @app.route("/")
 def home():
     return "IR search API (Elasticsearch)"
-
 
 @app.route("/auth/signup", methods=["POST"])
 def signup():
@@ -327,7 +242,6 @@ def signup():
         {"token": token, "user": {"id": user_id, "username": saved_username, "email": saved_email, "identifier": identifier}}
     ), 201
 
-
 @app.route("/auth/signin", methods=["POST"])
 def signin():
     data = request.get_json(silent=True) or {}
@@ -365,7 +279,6 @@ def signin():
         }
     )
 
-
 @app.route("/auth/me")
 def me():
     auth_error = require_auth()
@@ -373,7 +286,6 @@ def me():
         return auth_error
 
     return jsonify({"user": g.current_user})
-
 
 from flask import redirect, jsonify
 import ast
@@ -394,7 +306,6 @@ def recipe_image(recipe_id):
         return redirect(raw)
 
     return jsonify({"error": "Invalid image format"}), 500
-
 
 @app.route("/recipes/random")
 def random_recipes():
@@ -418,10 +329,8 @@ def search_api():
     try:
         results = elastic_search(q, top_k=5)
 
-        # 👉 ถ้ามี user → เช็ค bookmark
         conn = get_connection()
         cur = conn.cursor()
-
         recipe_ids = [r["recipe_id"] for r in results]
 
         if recipe_ids:
@@ -503,7 +412,6 @@ def add_bookmark():
         }
     })
 
-
 @app.route("/folders", methods=["GET", "POST"])
 def folders_api():
     auth_error = require_auth()
@@ -574,6 +482,39 @@ def folders_api():
         ]
     )
 
+@app.route("/folders/<int:folder_id>", methods=["DELETE"])
+def delete_folder(folder_id):
+    auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    user_id = g.current_user["user_id"]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # ลบ bookmarks ใน folder นี้ก่อน (กัน foreign key error)
+        cur.execute("""
+            DELETE FROM bookmarks
+            WHERE user_id = %s AND folder_id = %s
+        """, (user_id, folder_id))
+
+        # ลบ folder
+        cur.execute("""
+            DELETE FROM folders
+            WHERE folder_id = %s AND user_id = %s
+        """, (folder_id, user_id))
+
+        conn.commit()
+        return jsonify({"status": "deleted"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route("/bookmarks")
 def get_bookmarks():
     auth_error = require_auth()
@@ -613,7 +554,6 @@ def get_bookmarks():
 
     return jsonify(results)
 
-
 @app.route("/search/suggest")
 def search_suggest():
     auth_error = require_auth()
@@ -631,7 +571,6 @@ def search_suggest():
     except Exception as exc:
         traceback.print_exc()
         return jsonify([])
-
 
 @app.route("/bookmarks/suggestions")
 def get_bookmark_suggestions():

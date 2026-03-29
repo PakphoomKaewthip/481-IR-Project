@@ -285,6 +285,26 @@ export default function App() {
     setSpellSuggestions([]);
     await runSearch(trimmedSearchQuery);
   }
+  async function handleDeleteFolder(folderId) {
+  try {
+    await fetch(`http://127.0.0.1:5000/folders/${folderId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    // ✅ ลบออกจาก state
+    setFolders((prev) => prev.filter((f) => f.id !== folderId));
+
+    // (optional) ลบ bookmark ที่อยู่ใน folder นี้
+    setBookmarks((prev) =>
+      prev.filter((b) => b.folderId !== folderId)
+    );
+  } catch (err) {
+    console.error(err);
+  }
+}
 
   async function runSearch(currentQuery) {
     setFeedback("Searching recipes and ranking by similarity...");
@@ -429,6 +449,7 @@ export default function App() {
           onClearSearch={handleClearSearch}
           suggestion={suggestion}
           onAcceptSuggestion={handleAcceptSuggestion}
+          onDeleteFolder={handleDeleteFolder} 
           spellSuggestions={spellSuggestions}
           onAcceptSpellSuggestion={(correctedText) => {
             setQuery({ text: correctedText });

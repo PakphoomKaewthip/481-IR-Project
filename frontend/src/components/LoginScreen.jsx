@@ -41,7 +41,7 @@ export default function LoginScreen({
                   value={username}
                   onChange={(event) => onUsernameChange(event.target.value)}
                   type="text"
-                  placeholder="chef_demo"
+                  placeholder="username"
                   disabled={authLoading}
                 />
               </label>
@@ -52,7 +52,7 @@ export default function LoginScreen({
                   value={identifier}
                   onChange={(event) => onIdentifierChange(event.target.value)}
                   type="text"
-                  placeholder="chef_demo or student@demo.app"
+                  placeholder="username or Gmail"
                   disabled={authLoading}
                 />
               </label>
@@ -64,7 +64,7 @@ export default function LoginScreen({
                   value={email}
                   onChange={(event) => onEmailChange(event.target.value)}
                   type="email"
-                  placeholder="student@demo.app"
+                  placeholder="Gmail"
                   disabled={authLoading}
                 />
               </label>
