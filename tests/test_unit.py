@@ -68,7 +68,7 @@ class TestJWT:
             decode_token(".".join(parts))
 
     def test_expired_token_raises(self):
-        from backend.app import _b64url_encode, decode_token, JWT_SECRET
+        from backend.auth.jwt_handler import _b64url_encode, decode_token, JWT_SECRET
         import hmac, hashlib
 
         header = _b64url_encode(b'{"alg":"HS256","typ":"JWT"}')
