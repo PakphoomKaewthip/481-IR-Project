@@ -17,3 +17,5 @@ Icon
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 resources
+.idea
+backend
