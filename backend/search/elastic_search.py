@@ -6,8 +6,7 @@ from elasticsearch import exceptions as es_exceptions
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from indexer_manual import Indexer_manual
-
+from backend.search.indexer_manual import Indexer_manual
 INDEX_NAME = "recipes"
 ca_cert_path = str(Path.home() / "http_ca.crt")
 

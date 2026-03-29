@@ -1,3 +1,5 @@
+import BookmarksSection from "./BookmarksSection.jsx";
+
 function EmptyState({ message }) {
   return <div className="empty-state list-empty">{message}</div>;
 }
@@ -10,7 +12,6 @@ function RecipeImage({ recipe }) {
       </div>
     );
   }
-
   return <img className="result-image" src={recipe.image} alt={recipe.name} loading="lazy" decoding="async" />;
 }
 
@@ -41,16 +42,11 @@ function RecipeCard({ recipe, onOpenRecipe, showScore = false }) {
         <p className="result-description">{recipe.description}</p>
         <div className="result-tags">
           {recipe.tags?.slice(0, 3).map((tag) => (
-            <span key={tag} className="tag">
-              {tag}
-            </span>
+            <span key={tag} className="tag">{tag}</span>
           ))}
         </div>
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenRecipe(recipe);
-          }}
+          onClick={(event) => { event.stopPropagation(); onOpenRecipe(recipe); }}
           className="primary-btn result-detail-btn"
           type="button"
         >
@@ -61,7 +57,6 @@ function RecipeCard({ recipe, onOpenRecipe, showScore = false }) {
   );
 }
 
-// Reusable bookmark card — same markup used in both bookmarks & folders sections
 function BookmarkCard({ bookmark, onOpenRecipe, showSuggestionScore = false }) {
   return (
     <article
@@ -83,10 +78,7 @@ function BookmarkCard({ bookmark, onOpenRecipe, showSuggestionScore = false }) {
         <h3 className="result-title">{bookmark.recipe.name}</h3>
         <p className="result-description">{bookmark.recipe.description}</p>
         <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenRecipe(bookmark.recipe);
-          }}
+          onClick={(event) => { event.stopPropagation(); onOpenRecipe(bookmark.recipe); }}
           className="primary-btn result-detail-btn"
           type="button"
         >
@@ -128,32 +120,21 @@ export default function Dashboard({
   const seenRecipeIds = new Set();
   const activeFolder = folders.find((folder) => folder.id === activeFolderId) || folders[0] || null;
 
-  // --- Bookmarks section ---
-  const suggestedBookmarkIds = new Set(bookmarkSuggestions.map((bookmark) => bookmark.id));
-  const remainingBookmarks = bookmarks.filter((bookmark) => !suggestedBookmarkIds.has(bookmark.id));
-  const hasBookmarks = bookmarks.length > 0;
-
-  // --- Folders section ---
-  // bookmarks ทั้งหมดใน folder ที่เลือก
   const activeFolderBookmarks = bookmarks.filter(
     (bookmark) => activeFolder && bookmark.folderId === activeFolder.id
   );
 
-  // folderSuggestions มาจาก API — filter เฉพาะที่ folderId ตรงกับ activeFolder
   const activeFolderSuggestions = folderSuggestions.filter(
     (s) => String(s.folderId) === String(activeFolder?.id)
   );
 
-  // ตัด suggestions ที่แสดงแล้วออกจาก "All Bookmarks"
   const folderSuggestedIds = new Set(activeFolderSuggestions.map((s) => s.id));
   const folderRemainingBookmarks = activeFolderBookmarks.filter(
     (b) => !folderSuggestedIds.has(b.id)
   );
 
   for (const recipe of results) {
-    if (seenRecipeIds.has(recipe.recipeId)) {
-      continue;
-    }
+    if (seenRecipeIds.has(recipe.recipeId)) continue;
     seenRecipeIds.add(recipe.recipeId);
     uniqueRecipes.push(recipe);
   }
@@ -174,14 +155,10 @@ export default function Dashboard({
           {user ? (
             <>
               <span className="pill">{user.email}</span>
-              <button onClick={onLogout} className="ghost-btn" type="button">
-                Log Out
-              </button>
+              <button onClick={onLogout} className="ghost-btn" type="button">Log Out</button>
             </>
           ) : (
-            <button onClick={onGoToLogin} className="ghost-btn" type="button">
-              Sign In
-            </button>
+            <button onClick={onGoToLogin} className="ghost-btn" type="button">Sign In</button>
           )}
         </div>
       </header>
@@ -207,12 +184,9 @@ export default function Dashboard({
                       type="text"
                       placeholder="Dish name, ingredients, or cooking process"
                     />
-                    <button type="submit" className="primary-btn hero-search-btn">
-                      Search
-                    </button>
+                    <button type="submit" className="primary-btn hero-search-btn">Search</button>
                   </div>
 
-                  {/* Real-time spell suggestions */}
                   {spellSuggestions.length > 0 && (
                     <div className="spell-suggestions">
                       <span className="spell-suggestions-label">Did you mean:</span>
@@ -222,25 +196,18 @@ export default function Dashboard({
                           type="button"
                           className="spell-suggestion-pill"
                           onClick={() => onAcceptSpellSuggestion(
-                            query.text.replace(
-                              new RegExp(`\\b${item.original}\\b`, "gi"),
-                              item.suggestion
-                            )
+                            query.text.replace(new RegExp(`\\b${item.original}\\b`, "gi"), item.suggestion)
                           )}
                         >
-                          {query.text.replace(
-                            new RegExp(`\\b${item.original}\\b`, "gi"),
-                            item.suggestion
-                          )}
+                          {query.text.replace(new RegExp(`\\b${item.original}\\b`, "gi"), item.suggestion)}
                         </button>
                       ))}
                     </div>
                   )}
+
                   <div className="hero-search-meta">
                     <span className="pill">{results.length} results</span>
-                    <button onClick={onClearSearch} type="button" className="ghost-btn">
-                      Clear
-                    </button>
+                    <button onClick={onClearSearch} type="button" className="ghost-btn">Clear</button>
                   </div>
                 </form>
 
@@ -251,18 +218,12 @@ export default function Dashboard({
                         <span className="suggestion-dot"></span>
                         <div>
                           <strong>Possible typo detected</strong>
-                          <p className="bookmark-meta">
-                            Did you mean <strong>{suggestion.text}</strong>?
-                          </p>
+                          <p className="bookmark-meta">Did you mean <strong>{suggestion.text}</strong>?</p>
                         </div>
                       </div>
                       <div className="hero-actions">
-                        <button onClick={onAcceptSuggestion} className="primary-btn" type="button">
-                          Use correction
-                        </button>
-                        <button onClick={onClearSearch} className="ghost-btn" type="button">
-                          Keep my text
-                        </button>
+                        <button onClick={onAcceptSuggestion} className="primary-btn" type="button">Use correction</button>
+                        <button onClick={onClearSearch} className="ghost-btn" type="button">Keep my text</button>
                       </div>
                     </div>
                   </div>
@@ -281,12 +242,24 @@ export default function Dashboard({
                 </div>
                 <div className="merged-results-grid">
                   {uniqueRecipes.map((recipe) => (
-                    <RecipeCard
-                      key={recipe.recipeId}
-                      recipe={recipe}
-                      onOpenRecipe={onOpenRecipe}
-                      showScore
-                    />
+                    <RecipeCard key={recipe.recipeId} recipe={recipe} onOpenRecipe={onOpenRecipe} showScore />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {bookmarkSuggestions.length ? (
+              <section className="merged-results-section">
+                <div className="section-head shelf-head">
+                  <div>
+                    <h2 className="shelf-title">Suggest For You</h2>
+                    <p className="shelf-copy">Top picks selected from your taste profile.</p>
+                  </div>
+                  <span className="pill">{bookmarkSuggestions.length} total</span>
+                </div>
+                <div className="merged-results-grid bookmarks-grid">
+                  {bookmarkSuggestions.map((bookmark) => (
+                    <BookmarkCard key={`suggest-${bookmark.id}`} bookmark={bookmark} onOpenRecipe={onOpenRecipe} showSuggestionScore />
                   ))}
                 </div>
               </section>
@@ -303,72 +276,20 @@ export default function Dashboard({
                 </div>
                 <div className="merged-results-grid">
                   {randomRecipes.map((recipe) => (
-                    <RecipeCard
-                      key={`guest-${recipe.recipeId}`}
-                      recipe={recipe}
-                      onOpenRecipe={onOpenRecipe}
-                    />
+                    <RecipeCard key={`guest-${recipe.recipeId}`} recipe={recipe} onOpenRecipe={onOpenRecipe} />
                   ))}
                 </div>
               </section>
             ) : null}
           </>
         ) : currentSection === "bookmarks" ? (
-          <section className="merged-results-section">
-            {bookmarkSuggestions.length ? (
-              <section className="merged-results-section">
-                <div className="section-head shelf-head">
-                  <div>
-                    <h3 className="shelf-title">Suggest For You</h3>
-                    <p className="shelf-copy">Top 5 bookmarked recipes selected from your taste profile.</p>
-                  </div>
-                  <span className="pill">{bookmarkSuggestions.length} total</span>
-                </div>
-                <div className="merged-results-grid bookmarks-grid">
-                  {bookmarkSuggestions.map((bookmark) => (
-                    <BookmarkCard
-                      key={`suggest-${bookmark.id}`}
-                      bookmark={bookmark}
-                      onOpenRecipe={onOpenRecipe}
-                      showSuggestionScore
-                    />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {remainingBookmarks.length ? (
-              <section className="merged-results-section">
-                <div className="section-head shelf-head">
-                  <div>
-                    <h3 className="shelf-title">All Bookmarks</h3>
-                    <p className="shelf-copy">All saved recipes except the 5 items already shown in suggest.</p>
-                  </div>
-                  <span className="pill">{remainingBookmarks.length} total</span>
-                </div>
-                <div className="merged-results-grid bookmarks-grid">
-                  {remainingBookmarks.map((bookmark) => (
-                    <BookmarkCard
-                      key={`${bookmark.recipeId}-${bookmark.folderId}-${bookmark.rating}`}
-                      bookmark={bookmark}
-                      onOpenRecipe={onOpenRecipe}
-                    />
-                  ))}
-                </div>
-              </section>
-            ) : hasBookmarks ? (
-              <EmptyState message="All bookmarked recipes are currently shown in the suggest section above." />
-            ) : (
-              <EmptyState message="No bookmarks yet. Save a dish from Discover to show it here." />
-            )}
-          </section>
+          /* ── ใช้ BookmarksSection component ── */
+          <BookmarksSection bookmarks={bookmarks} onOpenRecipe={onOpenRecipe} />
         ) : (
           /* ───────────────── FOLDERS SECTION ───────────────── */
           <section className="merged-results-section">
             <div className="section-head shelf-head">
-              <div>
-                <h2 className="shelf-title">Folders</h2>
-              </div>
+              <div><h2 className="shelf-title">Folders</h2></div>
             </div>
 
             <div className="folder-create-box">
@@ -384,9 +305,7 @@ export default function Dashboard({
                   type="text"
                   placeholder="Folder name"
                 />
-                <button onClick={onCreateFolder} className="primary-btn" type="button">
-                  Create folder
-                </button>
+                <button onClick={onCreateFolder} className="primary-btn" type="button">Create folder</button>
               </div>
             </div>
 
@@ -394,7 +313,7 @@ export default function Dashboard({
               <>
                 <div className="folder-grid">
                   {folders.map((folder) => {
-                    const folderCount = bookmarks.filter((bookmark) => bookmark.folderId === folder.id).length;
+                    const folderCount = bookmarks.filter((b) => b.folderId === folder.id).length;
                     return (
                       <button
                         key={folder.id}
@@ -410,7 +329,6 @@ export default function Dashboard({
                   })}
                 </div>
 
-                {/* ── Active folder content ── */}
                 <div className="section-head shelf-head">
                   <div>
                     <h2 className="shelf-title">{activeFolder?.name || "Selected Folder"}</h2>
@@ -421,32 +339,23 @@ export default function Dashboard({
 
                 {activeFolderBookmarks.length ? (
                   <>
-                    {/* Suggest For You — เฉพาะ bookmarks ของ folder นี้ */}
                     {activeFolderSuggestions.length ? (
                       <section className="merged-results-section">
                         <div className="section-head shelf-head">
                           <div>
                             <h3 className="shelf-title">Suggest For You</h3>
-                            <p className="shelf-copy">
-                              Top picks from your taste profile inside this folder.
-                            </p>
+                            <p className="shelf-copy">Top picks from your taste profile inside this folder.</p>
                           </div>
                           <span className="pill">{activeFolderSuggestions.length} total</span>
                         </div>
                         <div className="merged-results-grid bookmarks-grid">
                           {activeFolderSuggestions.map((bookmark) => (
-                            <BookmarkCard
-                              key={`folder-suggest-${bookmark.id}`}
-                              bookmark={bookmark}
-                              onOpenRecipe={onOpenRecipe}
-                              showSuggestionScore
-                            />
+                            <BookmarkCard key={`folder-suggest-${bookmark.id}`} bookmark={bookmark} onOpenRecipe={onOpenRecipe} showSuggestionScore />
                           ))}
                         </div>
                       </section>
                     ) : null}
 
-                    {/* All bookmarks in this folder (excluding suggested ones) */}
                     {folderRemainingBookmarks.length ? (
                       <section className="merged-results-section">
                         <div className="section-head shelf-head">

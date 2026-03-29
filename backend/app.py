@@ -19,7 +19,7 @@ import numpy as np
 from flask import Flask, request, jsonify, Response, g
 import traceback
 from sklearn.metrics.pairwise import cosine_similarity
-from elastic_search import search as elastic_search, suggest_query
+from backend.search.elastic_search import search as elastic_search, suggest_query
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
