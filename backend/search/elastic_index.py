@@ -3,11 +3,8 @@ from elasticsearch import Elasticsearch, helpers
 from indexer_manual import Indexer_manual
 
 INDEX_NAME = "recipes"
-
 ca_cert_path = str(Path.home() / "http_ca.crt")
-
 ES_AUTH = ("elastic", "vBIu5OrE6zIDVFH_Z893")
-
 
 def build_es_client():
     https_client = Elasticsearch(
@@ -30,7 +27,6 @@ def build_es_client():
     )
     http_client.info()
     return http_client
-
 
 es = build_es_client()
 

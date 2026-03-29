@@ -12,7 +12,6 @@ ca_cert_path = str(Path.home() / "http_ca.crt")
 
 ES_AUTH = ("elastic", "vBIu5OrE6zIDVFH_Z893")
 
-
 def build_es_client():
     https_client = Elasticsearch(
         "https://localhost:9200",
@@ -38,7 +37,6 @@ def build_es_client():
 
 es = build_es_client()
 
-
 # LOAD CUSTOM TF-IDF INDEX
 indexer = Indexer_manual()
 documents = indexer.documents.copy()
@@ -53,7 +51,6 @@ description_map = dict(
 tfidf_vectorizer = TfidfVectorizer(ngram_range=(1, 1))
 X_tfidf = tfidf_vectorizer.fit_transform(documents["processed_text"])
 
-
 # HELPERS
 def minmax_normalize(scores):
     if len(scores) == 0:
@@ -66,7 +63,6 @@ def minmax_normalize(scores):
         return [1.0 for _ in scores]
 
     return [(s - mn) / (mx - mn) for s in scores]
-
 
 def elastic_retrieve(query, top_k=100):
     body = {
@@ -87,25 +83,15 @@ def elastic_retrieve(query, top_k=100):
 
     return res["hits"]["hits"]
 
-
 def tfidf_search_scores(query):
-    """
-    คำนวณ custom TF-IDF cosine similarity กับทุก document
-    แล้วคืนเป็น dict: recipe_id -> score
-    """
+
     q_vec = tfidf_vectorizer.transform([query])
     sims = cosine_similarity(q_vec, X_tfidf).flatten()
 
     score_map = dict(zip(documents["recipe_id"].astype(int), sims))
     return score_map
 
-
 def suggest_query(query, top_k=5):
-    """
-    ใช้ ES fuzzy multi_match เพื่อหาคำที่ใกล้เคียง
-    แล้ว extract tokens จาก name/category ที่ match
-    คืน list ของ suggested terms เรียงตาม score
-    """
     if not query or not query.strip():
         return []
 
@@ -113,7 +99,6 @@ def suggest_query(query, top_k=5):
     suggestions = []
 
     for token in tokens:
-        # ถ้าคำสั้นเกิน 2 ตัวอักษร ข้ามไป
         if len(token) < 3:
             continue
 
@@ -157,19 +142,14 @@ def suggest_query(query, top_k=5):
 
     return suggestions
 
-
 def _is_similar(a, b):
-    """
-    เช็คว่า 2 คำใกล้เคียงกันไหม โดยใช้ Levenshtein distance
-    threshold: ถ้าระยะห่างน้อยกว่าหรือเท่ากับ 2 ถือว่าใกล้เคียง
-    """
+
     if abs(len(a) - len(b)) > 3:
         return False
     return _levenshtein(a, b) <= 2
 
 
 def _levenshtein(s1, s2):
-    """คำนวณ Levenshtein distance ระหว่าง 2 strings"""
     m, n = len(s1), len(s2)
     dp = list(range(n + 1))
 
@@ -186,13 +166,8 @@ def _levenshtein(s1, s2):
 
     return dp[n]
 
-
 # HYBRID SEARCH
 def search(query, top_k=5, candidate_k=100, alpha=0.5):
-    """
-    alpha = น้ำหนักของ Elasticsearch score
-    (1 - alpha) = น้ำหนักของ custom TF-IDF score
-    """
 
     # 1) ดึง candidate จาก Elasticsearch ก่อน
     es_hits = elastic_retrieve(query, top_k=candidate_k)
@@ -234,7 +209,6 @@ def search(query, top_k=5, candidate_k=100, alpha=0.5):
     temp_results.sort(key=lambda x: x["score"], reverse=True)
 
     return temp_results[:top_k]
-
 
 #TEST
 if __name__ == "__main__":

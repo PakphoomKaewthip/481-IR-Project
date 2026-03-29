@@ -4,28 +4,19 @@ import re
 import string
 import time
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
-
 import pandas as pd
 from nltk.stem import PorterStemmer
-from rapidfuzz import fuzz, process
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 
-
-# -------------------------
 # GLOBALS
-# -------------------------
 TOKEN_RE = re.compile(r"[a-zA-Z]+")
 WHITESPACE_RE = re.compile(r"\s+")
 PUNCT_TABLE = str.maketrans("", "", string.punctuation + "“”‘’" + u"\xa0")
 STEMMER = PorterStemmer()
 
-
-# -------------------------
 # SMALL HELPERS
-# -------------------------
 def chunkify(seq: Sequence, n_chunks: int) -> List[Sequence]:
     n = len(seq)
     if n == 0:
@@ -42,65 +33,41 @@ def tokenize_fast(text: str) -> List[str]:
         return []
     return TOKEN_RE.findall(str(text).lower())
 
-
-# -------------------------
 # PARSERS
-# -------------------------
 def clean_r_c_format(x):
-    """
-    Convert R-style c("a", "b") into Python list.
-    Leave other values as-is.
-    """
     if pd.isna(x):
         return ""
-
     if isinstance(x, list):
         return x
-
     x = str(x).strip()
-
     if x.startswith("c(") and x.endswith(")"):
         inner = x[2:-1].strip()
         if inner == "":
             return []
-
         try:
             parsed = ast.literal_eval("[" + inner + "]")
             if isinstance(parsed, list):
                 return parsed
         except Exception:
             pass
-
         return [p.strip().strip('"').strip("'") for p in inner.split(",")]
-
     return x
 
-
 def parse_list_column(x) -> str:
-    """
-    Convert Python/R-like list payloads into a space-joined string.
-    """
     if isinstance(x, list):
         return " ".join(map(str, x))
-
     if pd.isna(x):
         return ""
-
     x = str(x).strip()
-
     try:
         parsed = ast.literal_eval(x)
         if isinstance(parsed, list):
             return " ".join(map(str, parsed))
     except Exception:
         pass
-
     return x
 
-
-# -------------------------
 # TEXT CLEANING
-# -------------------------
 def clean_text_basic(s) -> str:
     if pd.isna(s):
         return ""
@@ -113,7 +80,6 @@ def clean_text_basic(s) -> str:
     s = WHITESPACE_RE.sub(" ", s).strip()
     return s
 
-
 def normalize_name(text: str) -> str:
     if pd.isna(text):
         return ""
@@ -122,33 +88,17 @@ def normalize_name(text: str) -> str:
     text = WHITESPACE_RE.sub(" ", text).strip()
     return text
 
-
-# -------------------------
 # IMAGE CLEANING
-# -------------------------
 def clean_image_value(x) -> str:
-    """
-    Normalize image field into a single URL string or empty string.
-    Handles:
-    - plain URL
-    - "URL"
-    - c("URL1","URL2")
-    - ["URL1", "URL2"]
-    - character(0)
-    - empty / nan
-    """
     if pd.isna(x):
         return ""
-
     if isinstance(x, list):
         vals = [str(v).strip().strip('"').strip("'") for v in x if str(v).strip()]
         vals = [v for v in vals if v.startswith(("http://", "https://"))]
         return vals[0] if vals else ""
-
     x = str(x).strip()
     if x == "" or x.lower() in {"nan", "none", "null", "character(0)"}:
         return ""
-
     if x.startswith("c(") and x.endswith(")"):
         inner = x[2:-1].strip()
         if inner == "":
@@ -163,7 +113,6 @@ def clean_image_value(x) -> str:
             parts = [p.strip().strip('"').strip("'") for p in inner.split(",")]
             parts = [p for p in parts if p.startswith(("http://", "https://"))]
             return parts[0] if parts else ""
-
     try:
         parsed = ast.literal_eval(x)
         if isinstance(parsed, list):
@@ -176,10 +125,7 @@ def clean_image_value(x) -> str:
     x = x.strip('"').strip("'")
     return x if x.startswith(("http://", "https://")) else ""
 
-
-# -------------------------
 # IMAGE FILLING BY SIMILAR NAME
-# -------------------------
 def fill_missing_recipe_images_knn(
     df: pd.DataFrame,
     name_col: str = "name",
@@ -188,10 +134,7 @@ def fill_missing_recipe_images_knn(
     chunk_size: int = 50000,
     verbose: bool = True,
 ) -> pd.DataFrame:
-    """
-    Fill missing images using the nearest recipe name.
-    Always assigns the nearest match if a reference row exists.
-    """
+
     df = df.copy()
 
     if name_col not in df.columns or image_col not in df.columns:
@@ -261,15 +204,8 @@ def fill_missing_recipe_images_knn(
     df[image_col] = df[image_col].fillna("").astype(str).str.strip()
     return df.drop(columns=["_name_clean"])
 
-
-# -------------------------
 # DATAFRAME CLEANING
-# -------------------------
 def clean_recipes(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
-    """
-    Clean text + image together and return one normalized dataframe.
-    This is the main function you want before search indexing.
-    """
     t0 = time.time()
     df = df.copy()
 
@@ -310,7 +246,6 @@ def clean_recipes(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = ""
 
-    # preserve ID and image separately from text cleaning
     df["recipe_id"] = df["recipe_id"].astype(str).str.strip()
     df["name"] = df["name"].fillna("").astype(str).str.strip()
     df["images"] = df["images"].apply(clean_image_value)
@@ -346,10 +281,7 @@ def clean_recipes(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
 
     return df
 
-
-# -------------------------
 # STEM CACHE
-# -------------------------
 def create_stem_cache(
     df: pd.DataFrame,
     text_cols: Optional[Iterable[str]] = None,
@@ -373,10 +305,7 @@ def create_stem_cache(
 
     return stem_cache
 
-
-# -------------------------
 # PREPROCESS SINGLE TEXT
-# -------------------------
 def preprocess_single_text(text, stop_dict: set, stem_cache: dict) -> str:
     if pd.isna(text):
         return ""
@@ -386,10 +315,7 @@ def preprocess_single_text(text, stop_dict: set, stem_cache: dict) -> str:
     tokens = [stem_cache.get(t, STEMMER.stem(t)) for t in tokens]
     return " ".join(tokens)
 
-
-# -------------------------
 # SEQUENTIAL PREPROCESS
-# -------------------------
 def preprocess_series(
     text_series: pd.Series,
     stop_dict: set,
@@ -412,13 +338,9 @@ def preprocess_series(
 
     return pd.Series(processed, index=text_series.index)
 
-
-# -------------------------
 # PARALLEL PREPROCESS
-# -------------------------
 def _process_chunk(text_list: Sequence[str], stop_dict: set, stem_cache: dict) -> List[str]:
     return [preprocess_single_text(text, stop_dict, stem_cache) for text in text_list]
-
 
 def preprocess_series_parallel(
     text_series: pd.Series,
@@ -449,10 +371,7 @@ def preprocess_series_parallel(
 
     return pd.Series(results, index=text_series.index)
 
-
-# -------------------------
 # FULL PIPELINE
-# -------------------------
 def prepare_recipes_for_ir(
     recipes: pd.DataFrame,
     stop_dict: set,
@@ -461,13 +380,7 @@ def prepare_recipes_for_ir(
     fill_missing_images: bool = False,
     verbose: bool = True,
 ):
-    """
-    Full pipeline:
-    1) clean text + images together
-    2) optionally fill missing images from similar recipe names
-    3) build processed_text
-    Returns a single dataframe ready for search/indexing.
-    """
+
     t0 = time.time()
     df = recipes.copy()
 
@@ -537,10 +450,7 @@ def prepare_recipes_for_ir(
 
     return cleaned_df, stem_cache
 
-
-# -------------------------
 # SAVE HELPER
-# -------------------------
 def prepare_and_save_recipes_for_ir(
     recipes: pd.DataFrame,
     stop_dict: set,
@@ -565,10 +475,7 @@ def prepare_and_save_recipes_for_ir(
 
     return cleaned_df, stem_cache
 
-
-# -------------------------
 # OPTIONAL EXAMPLE
-# -------------------------
 if __name__ == "__main__":
     print("This module is ready.")
     print("Use prepare_and_save_recipes_for_ir(...) to create one final CSV for search.")

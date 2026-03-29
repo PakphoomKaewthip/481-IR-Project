@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 import pandas as pd
 
-
 class Indexer_manual:
     def __init__(self, csv_filename="resources/recipes_final_for_search.csv"):
         current_dir = Path(os.path.abspath(""))
@@ -35,7 +34,6 @@ class Indexer_manual:
         self.documents["name"] = self.documents["name"].fillna("").astype(str)
         self.documents["category"] = self.documents["category"].fillna("").astype(str)
         self.documents["processed_text"] = self.documents["processed_text"].fillna("").astype(str)
-
 
 if __name__ == "__main__":
     indexer = Indexer_manual()

@@ -122,12 +122,9 @@ function BookmarkCard({ bookmark, onOpenRecipe, showSuggestionScore = false }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// ✅ FolderCard แยกออกมาเพื่อใส่ปุ่มลบ
-// ─────────────────────────────────────────────
 function FolderCard({ folder, isActive, folderCount, onSelect, onDelete }) {
   function handleDeleteClick(event) {
-    event.stopPropagation(); // ❌ กันไม่ให้กระทบ onSelect
+    event.stopPropagation(); 
     const confirmed = window.confirm(
       `ลบ folder "${folder.name}" และ bookmark ทั้งหมดภายใน?`
     );
@@ -138,7 +135,6 @@ function FolderCard({ folder, isActive, folderCount, onSelect, onDelete }) {
   }
 
   return (
-    // ใช้ div ครอบ เพราะ button ซ้อน button ไม่ได้ใน HTML
     <div
       className={`folder-card${isActive ? " folder-card-active" : ""}`}
       onClick={() => onSelect(folder.id)}
@@ -151,7 +147,6 @@ function FolderCard({ folder, isActive, folderCount, onSelect, onDelete }) {
       <strong className="folder-card-title">{folder.name}</strong>
       <span className="folder-card-meta">{folderCount} saved recipes</span>
 
-      {/* ✅ ปุ่มลบ — อยู่มุมบนขวา */}
       <button
         type="button"
         onClick={handleDeleteClick}
@@ -179,9 +174,7 @@ function FolderCard({ folder, isActive, folderCount, onSelect, onDelete }) {
   );
 }
 
-// ─────────────────────────────────────────────
 // Dashboard
-// ─────────────────────────────────────────────
 export default function Dashboard({
   user,
   onLogout,
@@ -194,7 +187,7 @@ export default function Dashboard({
   folderName,
   onFolderNameChange,
   onCreateFolder,
-  onDeleteFolder, // ✅ prop ใหม่
+  onDeleteFolder,
   query,
   onQueryChange,
   onSearch,
@@ -490,7 +483,6 @@ export default function Dashboard({
 
             {folders.length ? (
               <>
-                {/* ✅ ใช้ FolderCard ใหม่แทน button เดิม */}
                 <div className="folder-grid">
                   {folders.map((folder) => {
                     const folderCount = bookmarks.filter(
@@ -503,7 +495,7 @@ export default function Dashboard({
                         isActive={activeFolder?.id === folder.id}
                         folderCount={folderCount}
                         onSelect={onActiveFolderChange}
-                        onDelete={onDeleteFolder} // ✅ ส่ง handler ลบ
+                        onDelete={onDeleteFolder}
                       />
                     );
                   })}
