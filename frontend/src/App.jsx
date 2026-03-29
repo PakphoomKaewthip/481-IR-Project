@@ -29,6 +29,8 @@ export default function App() {
   const [folders, setFolders] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [bookmarkSuggestions, setBookmarkSuggestions] = useState([]);
+  // suggestions เฉพาะ folder ที่เลือกอยู่
+  const [folderSuggestions, setFolderSuggestions] = useState([]);
   const [activeFolderId, setActiveFolderId] = useState("");
   const [currentView, setCurrentView] = useState("discover");
   const [currentSection, setCurrentSection] = useState("discover");
@@ -58,6 +60,7 @@ export default function App() {
     setBookmarkFolderId(activeFolderId || folders[0]?.id || "");
   }, [activeFolderId, folders]);
 
+  // โหลด global suggestions + bookmarks + folders ตอน login
   useEffect(() => {
     let cancelled = false;
 
@@ -67,6 +70,7 @@ export default function App() {
           setFolders([]);
           setBookmarks([]);
           setBookmarkSuggestions([]);
+          setFolderSuggestions([]);
           setActiveFolderId("");
         }
         return;
@@ -105,6 +109,31 @@ export default function App() {
       cancelled = true;
     };
   }, [token, user]);
+
+  // โหลด suggestions เฉพาะ folder เมื่อ activeFolderId เปลี่ยน
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFolderSuggestions() {
+      if (!token || !user || !activeFolderId) {
+        if (!cancelled) setFolderSuggestions([]);
+        return;
+      }
+
+      try {
+        const suggestions = await fetchBookmarkSuggestions(token, 5, activeFolderId);
+        if (!cancelled) setFolderSuggestions(suggestions);
+      } catch {
+        if (!cancelled) setFolderSuggestions([]);
+      }
+    }
+
+    loadFolderSuggestions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user, activeFolderId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +249,7 @@ export default function App() {
     setFolders([]);
     setBookmarks([]);
     setBookmarkSuggestions([]);
+    setFolderSuggestions([]);
     setActiveFolderId("");
     setCurrentView("discover");
     setCurrentSection("discover");
@@ -341,13 +371,17 @@ export default function App() {
 
       const refreshedBookmarks = await fetchBookmarks(token);
       let refreshedBookmarkSuggestions = [];
+      let refreshedFolderSuggestions = [];
       try {
         refreshedBookmarkSuggestions = await fetchBookmarkSuggestions(token);
+        refreshedFolderSuggestions = await fetchBookmarkSuggestions(token, 5, activeFolderId);
       } catch {
         refreshedBookmarkSuggestions = [];
+        refreshedFolderSuggestions = [];
       }
       setBookmarks(refreshedBookmarks);
       setBookmarkSuggestions(refreshedBookmarkSuggestions);
+      setFolderSuggestions(refreshedFolderSuggestions);
       setSelectedRecipe(null);
       setCurrentSection("bookmarks");
       setFeedback(`Bookmarked "${selectedRecipe.name}" with ${rating} stars.`);
@@ -401,6 +435,7 @@ export default function App() {
           randomRecipes={randomRecipes}
           bookmarks={bookmarks}
           bookmarkSuggestions={bookmarkSuggestions}
+          folderSuggestions={folderSuggestions}
           onOpenRecipe={handleOpenRecipe}
         />
       )}

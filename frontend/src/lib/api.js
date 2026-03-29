@@ -136,9 +136,13 @@ export async function fetchBookmarks(token) {
   }));
 }
 
-export async function fetchBookmarkSuggestions(token, limit = 5) {
+// folderId (optional) — ถ้าส่งมาจะ filter suggestions เฉพาะ folder นั้น
+export async function fetchBookmarkSuggestions(token, limit = 5, folderId = null) {
   const url = new URL("http://127.0.0.1:5000/bookmarks/suggestions");
   url.searchParams.set("limit", String(limit));
+  if (folderId) {
+    url.searchParams.set("folder_id", String(folderId));
+  }
 
   const response = await fetch(url.toString(), {
     headers: buildAuthHeaders(token),
