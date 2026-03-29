@@ -19,8 +19,7 @@ import numpy as np
 from flask import Flask, request, jsonify, Response, g
 import traceback
 from sklearn.metrics.pairwise import cosine_similarity
-from elastic_search import search as elastic_search
-
+from elastic_search import search as elastic_search, suggest_query
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -376,28 +375,25 @@ def me():
     return jsonify({"user": g.current_user})
 
 
+from flask import redirect, jsonify
+import ast
+
 @app.route("/recipe-image/<int:recipe_id>")
 def recipe_image(recipe_id):
-    image_url = RECIPE_IMAGE_MAP.get(str(recipe_id))
+    raw = RECIPE_IMAGE_MAP.get(str(recipe_id))
 
-    if not image_url:
+    if not raw:
         return jsonify({"error": "Image not found"}), 404
 
-    request_headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Referer": "https://www.food.com/",
-    }
-
     try:
-        upstream_request = Request(image_url, headers=request_headers)
-        with urlopen(upstream_request, timeout=15) as upstream_response:
-            body = upstream_response.read()
-            content_type = upstream_response.headers.get_content_type() or "image/jpeg"
+        parsed = ast.literal_eval(raw)
 
-        return Response(body, mimetype=content_type, headers={"Cache-Control": "public, max-age=86400"})
-    except (HTTPError, URLError, TimeoutError):
-        return jsonify({"error": "Unable to fetch image"}), 502
+        if isinstance(parsed, list) and len(parsed) > 0:
+            return redirect(parsed[0])
+    except:
+        return redirect(raw)
+
+    return jsonify({"error": "Invalid image format"}), 500
 
 
 @app.route("/recipes/random")
@@ -616,6 +612,25 @@ def get_bookmarks():
     conn.close()
 
     return jsonify(results)
+
+
+@app.route("/search/suggest")
+def search_suggest():
+    auth_error = require_auth()
+    if auth_error:
+        return auth_error
+
+    q = request.args.get("q", "").strip()
+
+    if not q or len(q) < 2:
+        return jsonify([])
+
+    try:
+        suggestions = suggest_query(q, top_k=5)
+        return jsonify(suggestions)
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify([])
 
 
 @app.route("/bookmarks/suggestions")

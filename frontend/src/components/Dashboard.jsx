@@ -61,6 +61,42 @@ function RecipeCard({ recipe, onOpenRecipe, showScore = false }) {
   );
 }
 
+// Reusable bookmark card — same markup used in both bookmarks & folders sections
+function BookmarkCard({ bookmark, onOpenRecipe, showSuggestionScore = false }) {
+  return (
+    <article
+      className="recommendation-card result-shelf-card"
+      onClick={() => onOpenRecipe(bookmark.recipe)}
+    >
+      <div className="result-image-wrap recommendation-image-wrap">
+        <RecipeImage recipe={bookmark.recipe} />
+      </div>
+      <div className="recommendation-card-body">
+        <div className="result-topline">
+          {showSuggestionScore ? (
+            <span className="pill score-pill">ML {bookmark.suggestionScore.toFixed(2)}</span>
+          ) : (
+            <span className="pill score-pill">{bookmark.rating} stars</span>
+          )}
+          <span className="result-category">{bookmark.folder || "No folder"}</span>
+        </div>
+        <h3 className="result-title">{bookmark.recipe.name}</h3>
+        <p className="result-description">{bookmark.recipe.description}</p>
+        <button
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenRecipe(bookmark.recipe);
+          }}
+          className="primary-btn result-detail-btn"
+          type="button"
+        >
+          View details
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export default function Dashboard({
   user,
   onLogout,
@@ -79,20 +115,39 @@ export default function Dashboard({
   onClearSearch,
   suggestion,
   onAcceptSuggestion,
+  spellSuggestions = [],
+  onAcceptSpellSuggestion,
   results,
   randomRecipes,
   bookmarks,
   bookmarkSuggestions,
+  folderSuggestions = [],
   onOpenRecipe,
 }) {
   const uniqueRecipes = [];
   const seenRecipeIds = new Set();
   const activeFolder = folders.find((folder) => folder.id === activeFolderId) || folders[0] || null;
+
+  // --- Bookmarks section ---
   const suggestedBookmarkIds = new Set(bookmarkSuggestions.map((bookmark) => bookmark.id));
   const remainingBookmarks = bookmarks.filter((bookmark) => !suggestedBookmarkIds.has(bookmark.id));
   const hasBookmarks = bookmarks.length > 0;
+
+  // --- Folders section ---
+  // bookmarks ทั้งหมดใน folder ที่เลือก
   const activeFolderBookmarks = bookmarks.filter(
-    (bookmark) => (activeFolder ? bookmark.folderId === activeFolder.id : false)
+    (bookmark) => activeFolder && bookmark.folderId === activeFolder.id
+  );
+
+  // folderSuggestions มาจาก API — filter เฉพาะที่ folderId ตรงกับ activeFolder
+  const activeFolderSuggestions = folderSuggestions.filter(
+    (s) => String(s.folderId) === String(activeFolder?.id)
+  );
+
+  // ตัด suggestions ที่แสดงแล้วออกจาก "All Bookmarks"
+  const folderSuggestedIds = new Set(activeFolderSuggestions.map((s) => s.id));
+  const folderRemainingBookmarks = activeFolderBookmarks.filter(
+    (b) => !folderSuggestedIds.has(b.id)
   );
 
   for (const recipe of results) {
@@ -156,6 +211,31 @@ export default function Dashboard({
                       Search
                     </button>
                   </div>
+
+                  {/* Real-time spell suggestions */}
+                  {spellSuggestions.length > 0 && (
+                    <div className="spell-suggestions">
+                      <span className="spell-suggestions-label">Did you mean:</span>
+                      {spellSuggestions.map((item, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          className="spell-suggestion-pill"
+                          onClick={() => onAcceptSpellSuggestion(
+                            query.text.replace(
+                              new RegExp(`\\b${item.original}\\b`, "gi"),
+                              item.suggestion
+                            )
+                          )}
+                        >
+                          {query.text.replace(
+                            new RegExp(`\\b${item.original}\\b`, "gi"),
+                            item.suggestion
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="hero-search-meta">
                     <span className="pill">{results.length} results</span>
                     <button onClick={onClearSearch} type="button" className="ghost-btn">
@@ -235,7 +315,6 @@ export default function Dashboard({
           </>
         ) : currentSection === "bookmarks" ? (
           <section className="merged-results-section">
-
             {bookmarkSuggestions.length ? (
               <section className="merged-results-section">
                 <div className="section-head shelf-head">
@@ -247,33 +326,12 @@ export default function Dashboard({
                 </div>
                 <div className="merged-results-grid bookmarks-grid">
                   {bookmarkSuggestions.map((bookmark) => (
-                    <article
+                    <BookmarkCard
                       key={`suggest-${bookmark.id}`}
-                      className="recommendation-card result-shelf-card"
-                      onClick={() => onOpenRecipe(bookmark.recipe)}
-                    >
-                      <div className="result-image-wrap recommendation-image-wrap">
-                        <RecipeImage recipe={bookmark.recipe} />
-                      </div>
-                      <div className="recommendation-card-body">
-                        <div className="result-topline">
-                          <span className="pill score-pill">ML {bookmark.suggestionScore.toFixed(2)}</span>
-                          <span className="result-category">{bookmark.folder || "No folder"}</span>
-                        </div>
-                        <h3 className="result-title">{bookmark.recipe.name}</h3>
-                        <p className="result-description">{bookmark.recipe.description}</p>
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onOpenRecipe(bookmark.recipe);
-                          }}
-                          className="primary-btn result-detail-btn"
-                          type="button"
-                        >
-                          View details
-                        </button>
-                      </div>
-                    </article>
+                      bookmark={bookmark}
+                      onOpenRecipe={onOpenRecipe}
+                      showSuggestionScore
+                    />
                   ))}
                 </div>
               </section>
@@ -290,33 +348,11 @@ export default function Dashboard({
                 </div>
                 <div className="merged-results-grid bookmarks-grid">
                   {remainingBookmarks.map((bookmark) => (
-                    <article
+                    <BookmarkCard
                       key={`${bookmark.recipeId}-${bookmark.folderId}-${bookmark.rating}`}
-                      className="recommendation-card result-shelf-card"
-                      onClick={() => onOpenRecipe(bookmark.recipe)}
-                    >
-                      <div className="result-image-wrap recommendation-image-wrap">
-                        <RecipeImage recipe={bookmark.recipe} />
-                      </div>
-                      <div className="recommendation-card-body">
-                        <div className="result-topline">
-                          <span className="pill score-pill">{bookmark.rating} stars</span>
-                          <span className="result-category">{bookmark.folder || "No folder"}</span>
-                        </div>
-                        <h3 className="result-title">{bookmark.recipe.name}</h3>
-                        <p className="result-description">{bookmark.recipe.description}</p>
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onOpenRecipe(bookmark.recipe);
-                          }}
-                          className="primary-btn result-detail-btn"
-                          type="button"
-                        >
-                          View details
-                        </button>
-                      </div>
-                    </article>
+                      bookmark={bookmark}
+                      onOpenRecipe={onOpenRecipe}
+                    />
                   ))}
                 </div>
               </section>
@@ -327,6 +363,7 @@ export default function Dashboard({
             )}
           </section>
         ) : (
+          /* ───────────────── FOLDERS SECTION ───────────────── */
           <section className="merged-results-section">
             <div className="section-head shelf-head">
               <div>
@@ -358,7 +395,6 @@ export default function Dashboard({
                 <div className="folder-grid">
                   {folders.map((folder) => {
                     const folderCount = bookmarks.filter((bookmark) => bookmark.folderId === folder.id).length;
-
                     return (
                       <button
                         key={folder.id}
@@ -374,6 +410,7 @@ export default function Dashboard({
                   })}
                 </div>
 
+                {/* ── Active folder content ── */}
                 <div className="section-head shelf-head">
                   <div>
                     <h2 className="shelf-title">{activeFolder?.name || "Selected Folder"}</h2>
@@ -383,37 +420,60 @@ export default function Dashboard({
                 </div>
 
                 {activeFolderBookmarks.length ? (
-                  <div className="merged-results-grid bookmarks-grid">
-                    {activeFolderBookmarks.map((bookmark) => (
-                      <article
-                        key={`${bookmark.recipeId}-${bookmark.folderId}-${bookmark.rating}`}
-                        className="recommendation-card result-shelf-card"
-                        onClick={() => onOpenRecipe(bookmark.recipe)}
-                      >
-                        <div className="result-image-wrap recommendation-image-wrap">
-                          <RecipeImage recipe={bookmark.recipe} />
-                        </div>
-                        <div className="recommendation-card-body">
-                          <div className="result-topline">
-                            <span className="pill score-pill">{bookmark.rating} stars</span>
-                            <span className="result-category">{bookmark.folder || activeFolder?.name}</span>
+                  <>
+                    {/* Suggest For You — เฉพาะ bookmarks ของ folder นี้ */}
+                    {activeFolderSuggestions.length ? (
+                      <section className="merged-results-section">
+                        <div className="section-head shelf-head">
+                          <div>
+                            <h3 className="shelf-title">Suggest For You</h3>
+                            <p className="shelf-copy">
+                              Top picks from your taste profile inside this folder.
+                            </p>
                           </div>
-                          <h3 className="result-title">{bookmark.recipe.name}</h3>
-                          <p className="result-description">{bookmark.recipe.description}</p>
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onOpenRecipe(bookmark.recipe);
-                            }}
-                            className="primary-btn result-detail-btn"
-                            type="button"
-                          >
-                            View details
-                          </button>
+                          <span className="pill">{activeFolderSuggestions.length} total</span>
                         </div>
-                      </article>
-                    ))}
-                  </div>
+                        <div className="merged-results-grid bookmarks-grid">
+                          {activeFolderSuggestions.map((bookmark) => (
+                            <BookmarkCard
+                              key={`folder-suggest-${bookmark.id}`}
+                              bookmark={bookmark}
+                              onOpenRecipe={onOpenRecipe}
+                              showSuggestionScore
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {/* All bookmarks in this folder (excluding suggested ones) */}
+                    {folderRemainingBookmarks.length ? (
+                      <section className="merged-results-section">
+                        <div className="section-head shelf-head">
+                          <div>
+                            <h3 className="shelf-title">All Bookmarks</h3>
+                            <p className="shelf-copy">
+                              {activeFolderSuggestions.length
+                                ? "Remaining recipes not shown in suggest above."
+                                : "All recipes saved in this folder."}
+                            </p>
+                          </div>
+                          <span className="pill">{folderRemainingBookmarks.length} total</span>
+                        </div>
+                        <div className="merged-results-grid bookmarks-grid">
+                          {folderRemainingBookmarks.map((bookmark) => (
+                            <BookmarkCard
+                              key={`${bookmark.recipeId}-${bookmark.folderId}-${bookmark.rating}`}
+                              bookmark={bookmark}
+                              onOpenRecipe={onOpenRecipe}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ) : activeFolderSuggestions.length ? (
+                      <EmptyState message="All recipes in this folder are shown in the suggest section above." />
+                    ) : null}
+                  </>
                 ) : (
                   <EmptyState message="This folder does not have any bookmarked recipes yet." />
                 )}

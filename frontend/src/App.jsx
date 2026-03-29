@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Dashboard from "./components/Dashboard.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import RecipeModal from "./components/RecipeModal.jsx";
-import { usePersistentState } from "./hooks/usePersistentState";
+import { usePersistentState } from "./hooks/usePersistentState.js";
 import {
   createFolder,
   fetchBookmarks,
@@ -11,14 +11,15 @@ import {
   fetchCurrentUser,
   fetchFolders,
   fetchRandomRecipes,
+  fetchSpellSuggestions,
   saveBookmark,
   searchRecipes,
   signIn,
   signUp,
-} from "./lib/api";
-import { COMMON_CORRECTIONS, DEFAULT_API_BASE, STORAGE_KEYS } from "./lib/constants";
-import { DEFAULT_QUERY, hasQueryValue, trimQuery } from "./lib/domain";
-import { getCorrectionSuggestion } from "./lib/utils";
+} from "./lib/api.js";
+import { COMMON_CORRECTIONS, DEFAULT_API_BASE, STORAGE_KEYS } from "./lib/constants.js";
+import { DEFAULT_QUERY, hasQueryValue, trimQuery } from "./lib/domain.js";
+import { getCorrectionSuggestion } from "./lib/utils.js";
 
 const DEFAULT_FEEDBACK =
   "Sign in, confirm any suggested correction, then search with one combined English query.";
@@ -29,6 +30,7 @@ export default function App() {
   const [folders, setFolders] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [bookmarkSuggestions, setBookmarkSuggestions] = useState([]);
+  const [folderSuggestions, setFolderSuggestions] = useState([]);
   const [activeFolderId, setActiveFolderId] = useState("");
   const [currentView, setCurrentView] = useState("discover");
   const [currentSection, setCurrentSection] = useState("discover");
@@ -43,6 +45,7 @@ export default function App() {
   const [results, setResults] = useState([]);
   const [randomRecipes, setRandomRecipes] = useState([]);
   const [suggestion, setSuggestion] = useState(null);
+  const [spellSuggestions, setSpellSuggestions] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [bookmarkFolderId, setBookmarkFolderId] = useState(activeFolderId || "");
   const [rating, setRating] = useState(5);
@@ -67,6 +70,7 @@ export default function App() {
           setFolders([]);
           setBookmarks([]);
           setBookmarkSuggestions([]);
+          setFolderSuggestions([]);
           setActiveFolderId("");
         }
         return;
@@ -101,10 +105,29 @@ export default function App() {
 
     loadUserData();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [token, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFolderSuggestions() {
+      if (!token || !user || !activeFolderId) {
+        if (!cancelled) setFolderSuggestions([]);
+        return;
+      }
+      try {
+        const suggestions = await fetchBookmarkSuggestions(token, 5, activeFolderId);
+        if (!cancelled) setFolderSuggestions(suggestions);
+      } catch {
+        if (!cancelled) setFolderSuggestions([]);
+      }
+    }
+
+    loadFolderSuggestions();
+
+    return () => { cancelled = true; };
+  }, [token, user, activeFolderId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,17 +152,13 @@ export default function App() {
           setFeedback(`Authentication required: ${error.message}`);
         }
       } finally {
-        if (!cancelled) {
-          setAuthLoading(false);
-        }
+        if (!cancelled) setAuthLoading(false);
       }
     }
 
     restoreSession();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [token, setToken, setUser]);
 
   useEffect(() => {
@@ -147,30 +166,38 @@ export default function App() {
 
     async function loadRandomRecipes() {
       if (user) {
-        if (!cancelled) {
-          setRandomRecipes([]);
-        }
+        if (!cancelled) setRandomRecipes([]);
         return;
       }
-
       try {
         const recipes = await fetchRandomRecipes(8);
-        if (!cancelled) {
-          setRandomRecipes(recipes);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setRandomRecipes([]);
-        }
+        if (!cancelled) setRandomRecipes(recipes);
+      } catch {
+        if (!cancelled) setRandomRecipes([]);
       }
     }
 
     loadRandomRecipes();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [user]);
+
+  // real-time spell suggest — debounce 400ms
+  useEffect(() => {
+    const q = query.text?.trim() || "";
+
+    if (!user || !token || q.length < 2) {
+      setSpellSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const suggestions = await fetchSpellSuggestions(token, q);
+      setSpellSuggestions(suggestions);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [query.text, user, token]);
 
   async function handleLogin() {
     if (!identifier.trim() || !password.trim()) {
@@ -220,6 +247,7 @@ export default function App() {
     setFolders([]);
     setBookmarks([]);
     setBookmarkSuggestions([]);
+    setFolderSuggestions([]);
     setActiveFolderId("");
     setCurrentView("discover");
     setCurrentSection("discover");
@@ -254,6 +282,7 @@ export default function App() {
     }
 
     setSuggestion(null);
+    setSpellSuggestions([]);
     await runSearch(trimmedSearchQuery);
   }
 
@@ -284,6 +313,7 @@ export default function App() {
   function handleClearSearch() {
     setQuery(DEFAULT_QUERY);
     setSuggestion(null);
+    setSpellSuggestions([]);
     setResults([]);
     setFeedback("Search fields cleared.");
   }
@@ -297,9 +327,7 @@ export default function App() {
     try {
       const folder = await createFolder(token, folderName.trim());
       setFolders((current) => [folder, ...current]);
-      if (!activeFolderId) {
-        setActiveFolderId(folder.id);
-      }
+      if (!activeFolderId) setActiveFolderId(folder.id);
       setBookmarkFolderId(folder.id);
       setFolderName("");
       setFeedback(`Folder "${folder.name}" created.`);
@@ -341,13 +369,17 @@ export default function App() {
 
       const refreshedBookmarks = await fetchBookmarks(token);
       let refreshedBookmarkSuggestions = [];
+      let refreshedFolderSuggestions = [];
       try {
         refreshedBookmarkSuggestions = await fetchBookmarkSuggestions(token);
+        refreshedFolderSuggestions = await fetchBookmarkSuggestions(token, 5, activeFolderId);
       } catch {
         refreshedBookmarkSuggestions = [];
+        refreshedFolderSuggestions = [];
       }
       setBookmarks(refreshedBookmarks);
       setBookmarkSuggestions(refreshedBookmarkSuggestions);
+      setFolderSuggestions(refreshedFolderSuggestions);
       setSelectedRecipe(null);
       setCurrentSection("bookmarks");
       setFeedback(`Bookmarked "${selectedRecipe.name}" with ${rating} stars.`);
@@ -397,10 +429,16 @@ export default function App() {
           onClearSearch={handleClearSearch}
           suggestion={suggestion}
           onAcceptSuggestion={handleAcceptSuggestion}
+          spellSuggestions={spellSuggestions}
+          onAcceptSpellSuggestion={(correctedText) => {
+            setQuery({ text: correctedText });
+            setSpellSuggestions([]);
+          }}
           results={results}
           randomRecipes={randomRecipes}
           bookmarks={bookmarks}
           bookmarkSuggestions={bookmarkSuggestions}
+          folderSuggestions={folderSuggestions}
           onOpenRecipe={handleOpenRecipe}
         />
       )}

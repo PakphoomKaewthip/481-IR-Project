@@ -136,9 +136,13 @@ export async function fetchBookmarks(token) {
   }));
 }
 
-export async function fetchBookmarkSuggestions(token, limit = 5) {
+// folderId (optional) — ถ้าส่งมาจะ filter suggestions เฉพาะ folder นั้น
+export async function fetchBookmarkSuggestions(token, limit = 5, folderId = null) {
   const url = new URL("http://127.0.0.1:5000/bookmarks/suggestions");
   url.searchParams.set("limit", String(limit));
+  if (folderId) {
+    url.searchParams.set("folder_id", String(folderId));
+  }
 
   const response = await fetch(url.toString(), {
     headers: buildAuthHeaders(token),
@@ -169,4 +173,23 @@ export async function saveBookmark(token, payload) {
   });
 
   return parseJsonResponse(response, "Failed to save bookmark");
+}
+
+// real-time spell suggest — คืน [{original, suggestion}, ...]
+export async function fetchSpellSuggestions(token, query) {
+  if (!query || query.trim().length < 2) return [];
+
+  const url = new URL("http://127.0.0.1:5000/search/suggest");
+  url.searchParams.set("q", query.trim());
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: buildAuthHeaders(token),
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
